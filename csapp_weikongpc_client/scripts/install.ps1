@@ -36,16 +36,32 @@ if ($osVersion -lt [Version]"10.0.14393") {
     exit 1
 }
 
-# --- 2. Create install directory ---
+# --- 2. Stop running service/process FIRST (exe file may be locked) ---
+$existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+if ($existing) {
+    Write-Log "Existing service found, stopping first..."
+    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
+# Also kill any running WeikongPC.exe process (e.g. debug mode)
+$runningProc = Get-Process -Name "WeikongPC" -ErrorAction SilentlyContinue
+if ($runningProc) {
+    Write-Log "Killing running WeikongPC.exe process..."
+    Stop-Process -Name "WeikongPC" -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+}
+
+# --- 3. Create install directory ---
 Write-Log "Creating directory: $InstallPath"
 New-Item -ItemType Directory -Path $InstallPath -Force | Out-Null
 New-Item -ItemType Directory -Path "$InstallPath\logs" -Force | Out-Null
 
-# --- 3. Copy files ---
+# --- 4. Copy files ---
 Write-Log "Copying files..."
 Copy-Item "$ScriptDir\WeikongPC.exe" "$InstallPath\WeikongPC.exe" -Force
 
-# --- 4. Generate uid and key (if ini not exists) ---
+# --- 5. Generate uid and key (if ini not exists) ---
 $iniPath = "$InstallPath\WeikongPC.ini"
 if (-not (Test-Path $iniPath)) {
     Write-Log "Generating device identity..."
@@ -87,17 +103,15 @@ os=$osCaption
     Write-Log "Existing uid: $uid"
 }
 
-# --- 5. Stop and remove existing service if any ---
+# --- 6. Remove existing service definition (if any) ---
 $existing = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($existing) {
-    Write-Log "Stopping existing service..."
-    Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Seconds 2
+    Write-Log "Deleting existing service..."
     sc.exe delete $ServiceName | Out-Null
     Start-Sleep -Seconds 1
 }
 
-# --- 6. Register service ---
+# --- 7. Register service ---
 Write-Log "Registering service: $ServiceName"
 $binPath = "`"$InstallPath\WeikongPC.exe`""
 sc.exe create $ServiceName binPath= $binPath start= auto | Out-Null
@@ -105,7 +119,7 @@ sc.exe description $ServiceName "WeikongPC PC client - process reporting and com
 sc.exe config $ServiceName DisplayName= "WeikongPC Report Service" | Out-Null
 sc.exe failure $ServiceName reset= 86400 actions= restart/60000/restart/60000/restart/60000 | Out-Null
 
-# --- 7. Start service ---
+# --- 8. Start service ---
 Write-Log "Starting service..."
 Start-Service -Name $ServiceName
 Start-Sleep -Seconds 2
@@ -113,6 +127,7 @@ $status = (Get-Service -Name $ServiceName).Status
 Write-Log "Service status: $status"
 
 # --- 8. Open bind page in browser ---
+# --- 9. Open bind page in browser ---
 Write-Log "Opening bind page in browser..."
 $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 $bindUrl = "https://weikongpc.com/bind?uid=$uid&uid_key=$key&ts=$ts"
