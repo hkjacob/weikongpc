@@ -65,8 +65,8 @@ Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-Execution
 ; 2. Register service via WeikongPC.exe install (program knows its own path)
 Filename: "{app}\WeikongPC.exe"; Parameters: "install"; Flags: waituntilterminated runhidden
 
-; 3. Show success window with QR codes
-Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-ExecutionPolicy Bypass -NoProfile -File ""{app}\scripts\success-window.ps1"" -WechatQrPath ""{app}\wechat-qr.jpg"" -IniQrPath ""{app}\ini-qr.png"" -IniContent ""See WeikongPC.ini"""; Flags: waituntilterminated
+; 3. Open bind page in default browser (replaces success window)
+Filename: "{app}\WeikongPC.exe"; Parameters: "rebind"; Flags: shellexec
 
 [UninstallRun]
 ; 1. Unregister service via WeikongPC.exe uninstall
