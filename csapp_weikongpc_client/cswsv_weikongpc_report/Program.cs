@@ -147,9 +147,11 @@ public class WeikongService : ServiceBase
 
         var beatReq = new BeatRequest
         {
+            Name = config.DeviceName,
             Os = config.Os,
             CpuUsage = cpuUsage,
             MemUsage = memUsage,
+            BootTime = SystemMonitor.GetBootTime(),
             Processes = processes
         };
 
@@ -225,6 +227,7 @@ public class IniConfig
     public string Uid { get; set; } = "";
     public string UidKey { get; set; } = "";
     public string Os { get; set; } = "";
+    public string DeviceName { get; set; } = "";
     public bool Valid { get; set; } = true;
 
     public static IniConfig Load(string path)
@@ -255,12 +258,14 @@ public class IniConfig
                     case ("device", "uid"): cfg.Uid = val; break;
                     case ("device", "uid_key"): cfg.UidKey = val; break;
                     case ("device", "os"): cfg.Os = val; break;
+                    case ("device", "name"): cfg.DeviceName = val; break;
                 }
             }
 
             if (string.IsNullOrEmpty(cfg.Uid) || cfg.Uid.Length != 32) cfg.Valid = false;
             if (string.IsNullOrEmpty(cfg.UidKey) || cfg.UidKey.Length != 16) cfg.Valid = false;
             if (string.IsNullOrEmpty(cfg.Os)) cfg.Os = RuntimeInformation.OSDescription;
+            if (string.IsNullOrEmpty(cfg.DeviceName)) cfg.DeviceName = Environment.MachineName;
         }
         catch (Exception)
         {
@@ -300,6 +305,20 @@ public static class SystemMonitor
             Logger.Error($"[MONITOR] {ex.Message}");
         }
         return (cpu, mem);
+    }
+
+    // Boot time in ISO 8601 UTC (e.g. 2026-08-10T06:00:00.000Z)
+    public static string GetBootTime()
+    {
+        try
+        {
+            var bootTime = DateTime.Now - TimeSpan.FromMilliseconds(Environment.TickCount64);
+            return bootTime.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        }
+        catch
+        {
+            return "";
+        }
     }
 
     public static List<ProcessInfo> GetProcesses()
@@ -521,9 +540,11 @@ internal struct MEMORYSTATUSEX
 // ============================================================================
 public class BeatRequest
 {
+    [JsonPropertyName("name")] public string Name { get; set; } = "";
     [JsonPropertyName("os")] public string Os { get; set; } = "";
     [JsonPropertyName("cpu_usage")] public double CpuUsage { get; set; }
     [JsonPropertyName("mem_usage")] public double MemUsage { get; set; }
+    [JsonPropertyName("boot_time")] public string BootTime { get; set; } = "";
     [JsonPropertyName("processes")] public List<ProcessInfo> Processes { get; set; } = new();
 }
 
