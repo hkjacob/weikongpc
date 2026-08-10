@@ -126,7 +126,7 @@ public class WeikongService : ServiceBase
                 waitSeconds = BeatIntervalSeconds;
             }
 
-            if (waitSeconds < 0) break;  // 401: exit
+            if (waitSeconds == int.MaxValue) break;  // shutdown issued
             if (token.IsCancellationRequested) break;
 
             try
@@ -173,8 +173,10 @@ public class WeikongService : ServiceBase
                 ExecuteShutdown();
                 return int.MaxValue;
             case 401:
-                Logger.Error("[BEAT] 401 auth failed, exit");
-                return -1;
+                // 401: device not bound yet. Don't exit — wait and retry.
+                // User may need time to scan QR code and bind device.
+                Logger.Info("[BEAT] 401 not bound yet, waiting 60s for user to bind device...");
+                return 60;  // retry in 60s
             case 429:
                 Logger.Info($"[BEAT] 429 too frequent, reset {BeatIntervalSeconds}s");
                 return BeatIntervalSeconds;
