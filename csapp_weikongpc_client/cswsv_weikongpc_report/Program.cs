@@ -35,6 +35,9 @@ if (Environment.UserInteractive)
         case "uninstall":
             ServiceSelfInstaller.Uninstall();
             return;
+        case "rebind":
+            RebindHelper.OpenBindPage();
+            return;
         default:
         {
             // Interactive mode: run main loop directly (for testing)
@@ -433,6 +436,47 @@ public static class ServiceSelfInstaller
             var stderr = p.StandardError.ReadToEnd().Trim();
             if (!string.IsNullOrEmpty(stdout)) Console.WriteLine(stdout);
             if (p.ExitCode != 0 && !string.IsNullOrEmpty(stderr)) Console.WriteLine($"[err] {stderr}");
+        }
+    }
+}
+
+// ============================================================================
+// Rebind helper (rebind command: open browser with bind URL)
+// ============================================================================
+public static class RebindHelper
+{
+    public static void OpenBindPage()
+    {
+        var iniPath = Path.Combine(AppContext.BaseDirectory, "WeikongPC.ini");
+        if (!File.Exists(iniPath))
+        {
+            Console.WriteLine($"Error: {iniPath} not found. Please run installer first.");
+            return;
+        }
+
+        var config = IniConfig.Load(iniPath);
+        if (!config.Valid)
+        {
+            Console.WriteLine("Error: WeikongPC.ini is invalid.");
+            return;
+        }
+
+        var ts = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var url = $"https://weikongpc.com/bind?uid={config.Uid}&uid_key={config.UidKey}&ts={ts}";
+
+        Console.WriteLine($"Opening bind page: {url}");
+        try
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to open browser: {ex.Message}");
+            Console.WriteLine($"Please manually visit: {url}");
         }
     }
 }
