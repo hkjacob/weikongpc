@@ -120,11 +120,15 @@ GET https://weikongpc.com/bindstatus?uid=<32位设备标识>
 |--------|-----|
 | URL | `https://weikongpc.com/bindcallback` |
 | Token | `wkpc_bind_token_2026`（与云函数环境变量 `WECHAT_TOKEN` 一致） |
-| 消息加解密方式 | 明文模式 |
+| EncodingAESKey | 云函数环境变量 `WECHAT_AES_KEY`（当前值已配置） |
+| 消息加解密方式 | **安全模式**（后端同时兼容明文模式） |
+| 数据格式 | XML |
 
 **GET（URL 验证）**：校验 `signature = sha1(sort(Token, timestamp, nonce))`，通过则原样返回 `echostr`。
 
-**POST（事件推送）**：同样校验签名后解析 XML：
+**POST（事件推送）**：
+- **安全模式**：校验 `msg_signature = sha1(sort(Token, timestamp, nonce, Encrypt))`，用 EncodingAESKey 做 AES-256-CBC 解密出明文事件 XML，处理后**加密回复**
+- **明文模式**：校验 `signature` 后直接解析明文 XML，明文回复
 
 | 事件 | EventKey | 处理 |
 |------|----------|------|
@@ -147,7 +151,7 @@ GET https://weikongpc.com/bindstatus?uid=<32位设备标识>
 
 ### 微信公众号凭据
 
-- 云函数 `nodeweb_weikongpc_mgmt` 环境变量：`WECHAT_TOKEN`（回调验签 Token，与公众号后台服务器配置一致）
+- 云函数 `nodeweb_weikongpc_mgmt` 环境变量：`WECHAT_TOKEN`（回调验签 Token）、`WECHAT_AES_KEY`（安全模式 EncodingAESKey）、`WECHAT_APPID`（AppID，AES 校验用）
 - 集成中心「公众号开放服务」统一托管 `appId` / `appSecret`（注入到 `nodeweb-weikongpc-7rs7ysvn-demo-scfweb`），出二维码/模板消息等主动调用微信的接口统一走它
 
 > ⚠️ 公众号后台需在「设置与开发 → 基本配置 → IP 白名单」中加入云函数出网 IP，否则主动调用微信 API 报 `errcode=40164`。当前只有集成函数会主动调微信，其**固定 EIP** 为 `101.34.34.227`。`/bindcallback` 只接收微信回调，不受白名单影响。
@@ -267,8 +271,8 @@ Compress-Archive -Path WeikongPC.exe, install.ps1, uninstall.ps1 -DestinationPat
 3. 脚本自动完成：复制文件 → 生成设备标识 → 注册服务 → 启动服务
 4. 自动打开浏览器绑定页面，扫码完成微信绑定
 
-> ✅ PS1 脚本 + `sc.exe` 都是系统组件，**不会触发 SmartScreen 和智能应用控制**，无需数字签名。
-> 💡 首次安装后客户端会收到 401（未绑定），自动等待重试，直到在微信中完成绑定；绑定后（bound_openid 非空）上报才会更新设备在线状态，未绑定设备的上报仅记录日志、不更新设备状态。
+> ✅ BAT 脚本 + `sc.exe` 都是系统组件，**不会触发 SmartScreen 和智能应用控制**，无需数字签名。
+> 💡 首次安装后客户端会收到 401（未绑定），自动每 180 秒重试，直到在微信中完成绑定；绑定后（bound_openid 非空）上报才会更新设备在线状态，未绑定设备的上报仅记录日志、不更新设备状态。
 
 ### 卸载
 
