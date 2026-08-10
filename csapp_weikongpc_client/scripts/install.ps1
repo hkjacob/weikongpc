@@ -79,6 +79,7 @@ if (-not (Test-Path $iniPath)) {
     for ($i = 0; $i -lt 16; $i++) { $key += $chars[$rnd.Next(0, $chars.Length)] }
 
     $osCaption = $os.Caption
+    $machineName = $env:COMPUTERNAME
     $iniContent = @"
 ; ============================================================================
 ; WeikongPC Client Config (WeikongPC.ini)
@@ -91,6 +92,7 @@ url=https://weikongpc.com/beat
 uid=$uid
 uid_key=$key
 os=$osCaption
+name=$machineName
 "@
     Set-Content -Path $iniPath -Value $iniContent -Encoding UTF8
     Write-Log "Generated uid: $uid"
@@ -126,8 +128,9 @@ Start-Sleep -Seconds 2
 $status = (Get-Service -Name $ServiceName).Status
 Write-Log "Service status: $status"
 
-# --- 8. Open bind page in browser ---
-# --- 9. Open bind page in browser ---
+# --- 9. Wait 5s for client to send first beat, then open bind page ---
+Write-Log "Waiting 5 seconds for the client to initialize..."
+Start-Sleep -Seconds 5
 Write-Log "Opening bind page in browser..."
 $ts = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 $bindUrl = "https://weikongpc.com/bind?uid=$uid&uid_key=$key&ts=$ts"
