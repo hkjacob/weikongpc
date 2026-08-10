@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <!-- Native AOT 编译：生成独立原生 exe，无需 .NET 运行时 -->
+    <PublishAot>true</PublishAot>
+    <!-- 裁剪全球化数据，减小体积 -->
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- 不生成 PDB，进一步减小体积 -->
+    <DebugType>none</DebugType>
+    <!-- 程序集名称 -->
+    <AssemblyName>WeikongPC</AssemblyName>
+    <RootNamespace>WeikongPC</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Windows Service 原生支持（ServiceBase） -->
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="8.0.1" />
+    <!-- 性能计数器（CPU 使用率采集） -->
+    <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

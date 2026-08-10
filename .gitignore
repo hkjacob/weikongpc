@@ -1,0 +1,49 @@
+# Build outputs
+bin/
+obj/
+output/
+*.exe
+*.dll
+*.pdb
+*.cache
+
+# Test directories
+aot-test/
+TestWeikongPC/
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+*.suo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Inno Setup installer (downloaded, not source)
+innosetup/
+
+# Working directories at repo root (not part of public repo)
+installer/
+cswsv_weikongpc_report/
+
+# Memory (project-local, not for public)
+.workbuddy/
+
+# Internal project docs (not for public GitHub)
+README_internal.md
+
+# Cloud backend (not in this repo - separate deployment)
+cloudfunctions/
+hosting/
+
+# Test files
+*.test.iss
+*.test.txt
+*.test_pp.iss
