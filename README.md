@@ -63,10 +63,10 @@ PC 客户端 (本仓库)          云端 (不在本仓库)
 | 组件 | 技术 | 说明 |
 |------|------|------|
 | PC 客户端 | C# .NET 8 + Native AOT | 单文件 exe，6 MB，无运行时依赖 |
-| 安装程序 | Inno Setup 6 + PowerShell | 三种模式：安装/修复/卸载 |
+| 安装脚本 | PowerShell | ZIP 解压 + 右键运行，无需签名 |
 | 设备身份 | SHA-256 哈希 | CPU+主板序列号 → 32 位 uid |
 | 鉴权 | HTTP Header | X-Uid / X-Uid-Key |
-| 协议 | 状态码驱动 | 200 正常 / 201 关机 / 401 失败 / 429 过频 |
+| 协议 | 状态码驱动 | 200 正常 / 201 关机 / 401 未绑定 / 429 过频 |
 
 ## 云端接口
 
@@ -191,13 +191,15 @@ weikongpc/                                # GitHub 仓库根
     ├── cswsv_weikongpc_report/          # PC 客户端源码
     │   ├── Program.cs                   # 单文件实现（约 400 行）
     │   └── cswsv_weikongpc_report.csproj # 项目配置（AOT 编译）
-    └── installer/                       # 安装程序
-        ├── installer.iss                # Inno Setup 脚本
-        ├── scripts/
-        │   ├── setup-helper.ps1         # 硬件识别 + ini 生成 + 二维码
-        │   └── success-window.ps1       # WPF 成功页面
+    ├── scripts/
+    │   ├── install.ps1                  # 安装脚本（管理员运行）
+    │   └── uninstall.ps1                # 卸载脚本（管理员运行）
+    ├── dist/                            # 分发包（ZIP）
+    │   └── WeikongPC-Client-v1.0.0.zip
+    └── docs/
+        ├── BEAT_PROTOCOL.md             # beat 协议规范
+        ├── SERVER_IMPLEMENTATION.md     # 服务器实现指南
         └── assets/
-            ├── LICENSE.txt              # 用户协议
             └── wechat-qr.jpg            # 公众号二维码
 ```
 
@@ -208,7 +210,6 @@ weikongpc/                                # GitHub 仓库根
 - .NET 8 SDK (8.0.423+)
 - Visual Studio Build Tools 2022（含 C++ 桌面开发工作负载）
 - Windows SDK 10.0.26100+
-- Inno Setup 6.7+（编译安装程序）
 
 ### 编译客户端
 
@@ -218,42 +219,28 @@ dotnet publish -r win-x64 -c Release
 # 产物：bin\Release\net8.0-windows\win-x64\publish\WeikongPC.exe (约 6 MB)
 ```
 
-### 编译安装程序
+### 打包 ZIP
 
 ```powershell
-cd csapp_weikongpc_client\installer
-ISCC.exe installer.iss
-# 产物：output\WeikongPC-Setup-1.0.0.exe (约 4 MB)
+# 将 WeikongPC.exe + install.ps1 + uninstall.ps1 压缩为 ZIP
+Compress-Archive -Path WeikongPC.exe, install.ps1, uninstall.ps1 -DestinationPath WeikongPC-Client-v1.0.0.zip
 ```
 
 ## 运行
 
-### 安装方式一：ZIP + PowerShell 脚本（推荐，无需签名）
+### 安装
 
 1. 下载 `WeikongPC-Client-v1.0.0.zip` 并解压
 2. 右键 `install.ps1` → 使用 PowerShell 运行（管理员）
 3. 脚本自动完成：复制文件 → 生成设备标识 → 注册服务 → 启动服务
 4. 自动打开浏览器绑定页面，扫码完成微信绑定
 
-> ✅ 优点：PS1 脚本 + `sc.exe` 都是系统组件，**不会触发 SmartScreen 和智能应用控制**，无需数字签名。
+> ✅ PS1 脚本 + `sc.exe` 都是系统组件，**不会触发 SmartScreen 和智能应用控制**，无需数字签名。
 > 💡 首次安装后客户端会收到 401（未绑定），会自动每 60 秒重试，直到在微信中完成绑定。
-
-### 安装方式二：Inno Setup 安装包
-
-双击 `WeikongPC-Setup-1.0.0.exe`，按向导完成安装。安装程序会：
-
-1. 复制文件到 `C:\Program Files\WeikongPC\`
-2. 生成 `WeikongPC.ini`（含设备 uid 和 key）
-3. 生成设备绑定二维码
-4. 注册 Windows 服务（开机自启）
-5. 显示公众号二维码和绑定二维码
-
-> ⚠️ 注意：无数字签名的 exe 可能被 SmartScreen 或智能应用控制拦截。
 
 ### 卸载
 
-方式一：右键 `uninstall.ps1` → 使用 PowerShell 运行（管理员）
-方式二：控制面板 → 程序和功能 → 卸载。
+右键 `uninstall.ps1` → 使用 PowerShell 运行（管理员）。
 
 ### 命令行
 
