@@ -5,7 +5,7 @@
 ## 关注公众号
 
 <p align="center">
-  <img src="csapp_weikongpc_client/docs/assets/wechat-qr.jpg" alt="微控儿童电脑PC 微信公众号" width="200"/>
+  <img src="assets/wechat-qr.jpg" alt="微控儿童电脑PC 微信公众号" width="200"/>
 </p>
 
 安装客户端后，安装程序会自动打开设备绑定链接 `https://weikongpc.com/bind`，页面展示设备专属二维码。用微信扫码并关注公众号「**微控儿童电脑PC**」，即自动完成设备绑定，可在公众号中远程管理孩子的电脑。
@@ -66,16 +66,17 @@ PC 客户端 (本仓库)          云端 (不在本仓库)
 | 安装脚本 | PowerShell | ZIP 解压 + 右键运行，无需签名 |
 | 设备身份 | SHA-256 哈希 | CPU+主板序列号 → 32 位 uid |
 | 鉴权 | HTTP Header | X-Uid / X-Uid-Key |
-| 协议 | 状态码驱动 | 200 正常 / 201 关机 / 401 未绑定 / 429 过频 |
+| 协议 | 状态码驱动 | 200 正常 / 201 关机 / 401 鉴权失败（未注册/未绑定/格式不合法）/ 429 过频 |
 
 ## 云端接口
 
-统一网关：`https://weikongpc.com`，共 3 个接口、2 个云函数（Node.js 18 HTTP Function，均绑定 VPC 访问 TDSQL-C MySQL）。
+统一网关：`https://weikongpc.com`，共 4 个接口、2 个云函数（Node.js 18 HTTP Function，均绑定 VPC 访问 TDSQL-C MySQL）。
 
 | 接口 | 方法 | 云函数 | 说明 |
 |------|------|--------|------|
-| `/beat` | POST | `nodeweb_weikongpc_beat` | PC 客户端心跳上报（详见 [beat 协议规范](csapp_weikongpc_client/docs/BEAT_PROTOCOL.md)） |
-| `/bind` | GET | `nodeweb_weikongpc_mgmt` | 设备绑定页：校验设备身份，调用集成中心「公众号开放服务」生成带参数临时二维码 |
+| `/beat` | POST | `nodeweb_weikongpc_beat` | PC 客户端心跳上报（详见 [beat 协议规范](BEAT_PROTOCOL.md)） |
+| `/bind` | GET | `nodeweb_weikongpc_mgmt` | 设备绑定页：参数校验 + 客户端安装判断 + 生成带参数临时二维码 |
+| `/bindstatus` | GET | `nodeweb_weikongpc_mgmt` | 绑定结果轮询接口（绑定页 JS 每 3 秒轮询） |
 | `/bindcallback` | GET/POST | `nodeweb_weikongpc_mgmt` | 微信公众号回调：URL 验证 + 扫码关注/扫码事件绑定 |
 | `/offiaccount/*` | POST | `nodeweb-weikongpc-7rs7ysvn-demo-scfweb` | 集成中心「公众号开放服务」：qrcode/create、oauth、token、模板消息、客服消息等 |
 
@@ -87,12 +88,31 @@ GET https://weikongpc.com/bind?uid=<32位设备标识>&uid_key=<16位密钥>&ts=
 
 由安装程序在安装完成后用浏览器打开。流程：
 
-1. 校验 `uid`（32 位哈希）、`uid_key`（16 位随机）、`ts`（10-13 位数字）
-2. 查询设备表：设备不存在则以 uid/uid_key 登记（**设备注册路径**）；已存在则校验密钥
-3. 调用集成中心「公众号开放服务」`POST /offiaccount/qrcode/create`（`QR_STR_SCENE`，scene_str = uid，有效期 30 天），返回二维码图片 URL
-4. 返回 HTML 页面，内嵌二维码与操作指引
+1. **参数校验**：`uid`（32 位哈希）、`uid_key`（16 位随机）、`ts`（10-13 位数字）缺失或格式非法 → 错误提示页
+2. **设备表校验**：设备不存在则以 uid/uid_key 登记（**设备注册路径**）；已存在则校验密钥，不匹配 → 错误提示页
+3. **客户端安装判断**（日志表）：查询 `t_device_log` 是否有该设备的上报记录
+   - 无记录 → 返回「**客户端尚未安装成功**」提示页，引导用户先在电脑端安装客户端，客户端首次上报后再刷新
+   - 有记录 → 进入第 4 步
+4. **生成二维码**：调用集成中心「公众号开放服务」`POST /offiaccount/qrcode/create`（`QR_STR_SCENE`，scene_str = uid，有效期 30 天），返回二维码图片 URL
+5. **返回绑定页**：内嵌二维码 + 操作指引，页面 JS **每 3 秒轮询 `/bindstatus`**，绑定成功后自动显示结果（设备名称/系统/IP）
 
-### 2. 公众号回调 `/bindcallback`
+### 2. 绑定结果轮询 `/bindstatus`
+
+```
+GET https://weikongpc.com/bindstatus?uid=<32位设备标识>
+```
+
+返回 JSON：
+
+```json
+// 未绑定
+{"bound": false}
+// 已绑定（status=1 主管理员 或 2 普通成员，取主管理员优先）
+{"bound": true, "openid": "oXXXX", "nickname": "", "bind_time": "2026-08-10T17:31:48.000Z",
+ "status": 1, "device": {"name": "电脑-01", "os": "Windows 11", "last_ip": "1.2.3.4"}}
+```
+
+### 3. 公众号回调 `/bindcallback`
 
 在公众号后台「设置与开发 → 基本配置 → 服务器配置」中配置：
 
@@ -108,9 +128,20 @@ GET https://weikongpc.com/bind?uid=<32位设备标识>&uid_key=<16位密钥>&ts=
 
 | 事件 | EventKey | 处理 |
 |------|----------|------|
-| `subscribe`（扫码关注） | `qrscene_<uid>` | 绑定：openid + uid 写入微信用户表、绑定表，更新设备表 `bound_openid`，回复「绑定成功」 |
-| `SCAN`（已关注用户扫码） | `<uid>` | 同上 |
+| `subscribe`（扫码关注） | `qrscene_<uid>` | 扫码+关注同时完成 → 执行绑定 |
+| `subscribe`（普通关注） | 空 | **不执行绑定**，回复引导消息「请扫描设备二维码完成绑定」 |
+| `SCAN`（已关注用户扫码） | `<uid>` | 执行绑定 |
 | `unsubscribe`（取关） | - | 微信用户表标记 `subscribe=0` |
+
+**绑定逻辑（doBind）**：
+
+1. 设备表无该 uid 记录 → **首次绑定**：创建 `t_device` 设备记录（uid_key 占位，客户端上报后以真实密钥生效）
+2. 微信用户表 upsert（subscribe=1）
+3. 绑定表主管理员规则（`status`：0-未绑定 / **1-主管理员** / 2-普通成员）：
+   - 该设备原有主管理员（status=1）且不是当前用户 → 自动降级为普通成员（status=2）
+   - 当前 openid upsert 为 **主管理员（status=1）**
+4. 更新设备表 `bound_openid` 为当前主管理员
+5. **微信回复绑定成功**，并列出设备信息：名称、操作系统、最后在线 IP
 
 回调必须 5 秒内响应，业务失败也回复文本消息而非 `success`（避免微信静默重试）。
 
@@ -136,6 +167,7 @@ MySQL（TDSQL-C，库 `weikongpc-d6g8itpyf026b3c4f`），共 4 张表。
 | os | varchar(32) | 操作系统版本 |
 | status | tinyint | 0 离线 / 1 在线 |
 | shutdown_status | tinyint | 关机指令：0 无 / 1 待下发 / 2 已下发 |
+| last_boot_time | datetime | 最后开机时间（客户端上报） |
 | last_beat_at | datetime | 最后心跳时间 |
 | last_ip | varchar(45) | 最后上报 IP |
 | bound_openid | varchar(64) | 最后绑定的微信用户 openid |
@@ -147,8 +179,12 @@ MySQL（TDSQL-C，库 `weikongpc-d6g8itpyf026b3c4f`），共 4 张表。
 |------|------|------|
 | id | bigint unsigned PK | 自增主键 |
 | uid | char(32) | 关联 t_device.uid |
+| name | varchar(64) | 设备名称（客户端上报） |
+| os | varchar(32) | 操作系统版本（客户端上报） |
+| ip | varchar(45) | 客户端上报 IP |
 | cpu_usage | decimal(5,2) | CPU 使用率 |
 | mem_usage | decimal(5,2) | 内存使用率 |
+| boot_time | datetime | 开机时间（客户端上报） |
 | processes | json | 进程列表 |
 | beat_time | datetime | 心跳上报时间 |
 | cmd_time | datetime | 指令下发时间（NULL 无指令） |
@@ -173,7 +209,7 @@ MySQL（TDSQL-C，库 `weikongpc-d6g8itpyf026b3c4f`），共 4 张表。
 | id | bigint unsigned PK | 自增主键 |
 | openid | varchar(64) | 微信用户 openid |
 | uid | char(32) | 关联 t_device.uid |
-| status | tinyint | 1 已绑定 / 0 已解绑 |
+| status | tinyint | 0 未绑定 / 1 已绑定主管理员 / 2 已绑定普通成员 |
 | bind_time | datetime | 绑定时间 |
 | unbind_time | datetime | 解绑时间（NULL 未解绑） |
 | created_at / updated_at | datetime | 创建/更新时间 |
@@ -185,6 +221,7 @@ MySQL（TDSQL-C，库 `weikongpc-d6g8itpyf026b3c4f`），共 4 张表。
 ```
 weikongpc/                                # GitHub 仓库根
 ├── README.md                            # 本文件
+├── BEAT_PROTOCOL.md                     # beat 协议规范
 ├── LICENSE                              # MIT 开源协议
 ├── .gitignore
 └── csapp_weikongpc_client/              # PC 客户端项目
@@ -194,13 +231,8 @@ weikongpc/                                # GitHub 仓库根
     ├── scripts/
     │   ├── install.ps1                  # 安装脚本（管理员运行）
     │   └── uninstall.ps1                # 卸载脚本（管理员运行）
-    ├── dist/                            # 分发包（ZIP）
-    │   └── WeikongPC-Client-v1.0.0.zip
-    └── docs/
-        ├── BEAT_PROTOCOL.md             # beat 协议规范
-        ├── SERVER_IMPLEMENTATION.md     # 服务器实现指南
-        └── assets/
-            └── wechat-qr.jpg            # 公众号二维码
+    └── dist/                            # 分发包（ZIP）
+        └── WeikongPC-Client-v1.0.0.zip
 ```
 
 ## 编译
@@ -236,7 +268,7 @@ Compress-Archive -Path WeikongPC.exe, install.ps1, uninstall.ps1 -DestinationPat
 4. 自动打开浏览器绑定页面，扫码完成微信绑定
 
 > ✅ PS1 脚本 + `sc.exe` 都是系统组件，**不会触发 SmartScreen 和智能应用控制**，无需数字签名。
-> 💡 首次安装后客户端会收到 401（未绑定），会自动每 60 秒重试，直到在微信中完成绑定。
+> 💡 首次安装后客户端会收到 401（未绑定），自动等待重试，直到在微信中完成绑定；绑定后（bound_openid 非空）上报才会更新设备在线状态，未绑定设备的上报仅记录日志、不更新设备状态。
 
 ### 卸载
 
@@ -270,8 +302,7 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 ## 协议文档
 
-- 📡 **[beat 协议规范](csapp_weikongpc_client/docs/BEAT_PROTOCOL.md)**：客户端与服务器端的通信协议（HTTP Header 鉴权 + 状态码驱动）
-- 🛠️ **[服务器实现指南](csapp_weikongpc_client/docs/SERVER_IMPLEMENTATION.md)**：如何自建服务器对接本客户端（Node.js / Python / Go / Java 等）
+- 📡 **[beat 协议规范](BEAT_PROTOCOL.md)**：客户端与服务器端的通信协议（HTTP Header 鉴权 + 状态码驱动）
 
 ## 贡献
 
