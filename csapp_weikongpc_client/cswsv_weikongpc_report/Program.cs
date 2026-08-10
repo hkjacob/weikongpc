@@ -177,8 +177,8 @@ public class WeikongService : ServiceBase
             case 401:
                 // 401: device not bound yet. Don't exit — wait and retry.
                 // User may need time to scan QR code and bind device.
-                Logger.Info("[BEAT] 401 not bound yet, waiting 60s for user to bind device...");
-                return 60;  // retry in 60s
+                Logger.Info($"[BEAT] 401 not bound yet, waiting {BeatIntervalSeconds}s for user to bind device...");
+                return BeatIntervalSeconds;  // retry in 180s
             case 429:
                 Logger.Info($"[BEAT] 429 too frequent, reset {BeatIntervalSeconds}s");
                 return BeatIntervalSeconds;
