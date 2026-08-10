@@ -1,48 +1,55 @@
-# WeikongPC Beat 鍗忚锛坴1.0锛?
-PC 瀹㈡埛绔?鈫?鏈嶅姟鍣ㄧ鐨勫績璺充笂鎶ユ帴鍙ｈ鑼冦€?
-> 鈿狅笍 **鍏充簬鏈嶅姟鍣ㄥ疄鐜?*
-> - 鏈嶅姟鍣ㄧ**瀹屽叏鍙互鑷瀹炵幇**锛堣嚜寤?HTTP 鏈嶅姟鍗冲彲锛?> - 鑻ヤ娇鐢?*瀹樻柟鏈嶅姟鍣?* `https://weikongpc.com/beat`锛屽繀椤诲厛鍏虫敞寰俊鍏紬鍙枫€屽井鎺у効绔ョ數鑴慞C銆嶅苟鍦ㄥ叕浼楀彿鑿滃崟銆岀粦瀹氥€嶄腑鎵爜鍏宠仈璁惧
-> - 瀹樻柟鏈嶅姟鍣ㄧ殑寮€婧愮増鏈殏鏈彂甯冿紝鏈崗璁彲渚涚涓夋柟瀹炵幇瀵规帴
+# WeikongPC Beat 协议（v1.0）
+
+PC 客户端 → 服务器端的心跳上报接口规范。
+
+> ⚠️ **关于服务器实现**
+> - 服务器端**完全可以自行实现**（自建 HTTP 服务即可）
+> - 若使用**官方服务器** `https://weikongpc.com/beat`，必须先关注微信公众号「微控儿童电脑PC」并在公众号菜单「绑定」中扫码关联设备
+> - 官方服务器的开源版本暂未发布，本协议可供第三方实现对接
 
 ---
 
-## 1. 鎺ュ彛鍦板潃
+## 1. 接口地址
 
 ```
 POST {ServerUrl}/beat
 ```
 
-榛樿鏈嶅姟鍣ㄥ湴鍧€锛歚https://weikongpc.com/beat`锛堝彲鍦?`WeikongPC.ini` 鐨?`[server] url` 涓慨鏀癸級
+默认服务器地址：`https://weikongpc.com/beat`（可在 `WeikongPC.ini` 的 `[server] url` 中修改）
 
-## 2. 閴存潈鏂瑰紡
+## 2. 鉴权方式
 
-浣跨敤 HTTP Header 浼犻€掕澶囪韩浠藉嚟璇侊紙**涓嶈鏀惧湪 body 閲?*锛夛細
+使用 HTTP Header 传递设备身份凭证（**不要放在 body 里**）：
 
-| Header | 鏍煎紡 | 璇存槑 |
+| Header | 格式 | 说明 |
 |--------|------|------|
-| `X-Uid` | 32 浣?hex锛圫HA-256锛?| 璁惧鍞竴鏍囪瘑 |
-| `X-Uid-Key` | 16 浣嶅瓧绗︼紙瀛楁瘝+鏁板瓧锛?| 璁惧瀵嗛挜 |
+| `X-Uid` | 32 位 hex（SHA-256） | 设备唯一标识 |
+| `X-Uid-Key` | 16 位字符（字母+数字） | 设备密钥 |
 
-**鐢熸垚瑙勫垯**锛?
+**生成规则**：
+
 ```text
-raw = "{CPU 搴忓垪鍙穧|{涓绘澘搴忓垪鍙穧"
+raw = "{CPU 序列号}|{主板序列号}"
 uid = SHA256(raw).hex.substring(0, 32)
-uid_key = 16 浣嶉殢鏈哄瓧绗︼紙鍘绘帀鏄撴贩瀛楃锛?/O/1/l/I锛?```
+uid_key = 16 位随机字符（去掉易混字符：0/O/1/l/I）
+```
 
-CPU 搴忓垪鍙疯幏鍙栵紙PowerShell锛夛細
+CPU 序列号获取（PowerShell）：
 ```powershell
 Get-CimInstance Win32_Processor | Select-Object -First 1 -ExpandProperty ProcessorId
 ```
 
-涓绘澘搴忓垪鍙疯幏鍙栵紙PowerShell锛夛細
+主板序列号获取（PowerShell）：
 ```powershell
 Get-CimInstance Win32_BaseBoard | Select-Object -First 1 -ExpandProperty SerialNumber
 ```
 
-鈿狅笍 **鍏抽敭绾︽潫**锛?- 鍚屼竴鍙扮數鑴戝繀椤?*濮嬬粓鐢熸垚鐩稿悓鐨?uid**锛圕PU+涓绘澘搴忓垪鍙风ǔ瀹氫笉鍙橈級
-- `uid_key` 鐢辨湇鍔″櫒绔敓鎴愶紝**棣栨缁戝畾鍚庡啓鍏?ini 鏂囦欢**锛屽鎴风闇€鎸佷箙淇濆瓨
+⚠️ **关键约束**：
+- 同一台电脑必须**始终生成相同的 uid**（CPU+主板序列号稳定不变）
+- `uid_key` 由服务器端生成，**首次绑定后写入 ini 文件**，客户端需持久保存
 
-## 3. 璇锋眰浣擄紙JSON锛?
+## 3. 请求体（JSON）
+
 ```json
 {
   "os": "Windows 11 Pro 24H2",
@@ -59,121 +66,155 @@ Get-CimInstance Win32_BaseBoard | Select-Object -First 1 -ExpandProperty SerialN
 }
 ```
 
-| 瀛楁 | 绫诲瀷 | 蹇呭～ | 璇存槑 |
+| 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `os` | string | 鍚?| 鎿嶄綔绯荤粺鐗堟湰锛堝 "Windows 11 Pro 24H2"锛墊
-| `cpu_usage` | float | 鍚?| CPU 浣跨敤鐜囷紙鐧惧垎姣旓紝0-100锛墊
-| `mem_usage` | float | 鍚?| 鍐呭瓨浣跨敤鐜囷紙鐧惧垎姣旓紝0-100锛墊
-| `processes` | array | 鍚?| 褰撳墠杩涚▼鍒楄〃锛?*浠呭悕绉板拰璧勬簮鍗犵敤**锛屼笉閲囬泦鍏朵粬淇℃伅锛墊
+| `os` | string | 否 | 操作系统版本（如 "Windows 11 Pro 24H2"）|
+| `cpu_usage` | float | 否 | CPU 使用率（百分比，0-100）|
+| `mem_usage` | float | 否 | 内存使用率（百分比，0-100）|
+| `processes` | array | 否 | 当前进程列表（**仅名称和资源占用**，不采集其他信息）|
 
-### processes 鍏冪礌
+### processes 元素
 
-| 瀛楁 | 绫诲瀷 | 蹇呭～ | 璇存槑 |
+| 字段 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `name` | string | 鏄?| 杩涚▼鍚嶏紙鍚?`.exe` 鍚庣紑锛墊
-| `pid` | int | 鏄?| 杩涚▼ ID |
-| `cpu` | float | 鍚?| CPU 浣跨敤鐜囷紙鐧惧垎姣旓級|
-| `mem` | float | 鍚?| 鍐呭瓨鍗犵敤锛圡B锛墊
+| `name` | string | 是 | 进程名（含 `.exe` 后缀）|
+| `pid` | int | 是 | 进程 ID |
+| `cpu` | float | 否 | CPU 使用率（百分比）|
+| `mem` | float | 否 | 内存占用（MB）|
 
-## 4. 鍝嶅簲锛堜粎 HTTP 鐘舵€佺爜锛屾棤 body锛?
-| 鐘舵€佺爜 | 鍚箟 | 瀹㈡埛绔姩浣?|
+## 4. 响应（仅 HTTP 状态码，无 body）
+
+| 状态码 | 含义 | 客户端动作 |
 |--------|------|-----------|
-| **200** | 鎺ュ彈鎴愬姛锛屾棤鍏虫満鎸囦护 | 绛?180 绉掑悗鍐嶄笂鎶?|
-| **201** | 鎺ュ彈鎴愬姛锛屼笅鍙戝叧鏈烘寚浠?| 绔嬪嵆鎵ц `shutdown -s -t 0` |
-| **401** | 鏈敞鍐?/ 閴存潈澶辨晥 | 鍋滄涓婃姤锛岃繘绋嬮€€鍑?|
-| **429** | 璇锋眰杩囬锛堥棿闅?< 120 绉掞級| 绛夊緟鍚庨噸璇曪紙涓嶆秷鑰?last_beat_at锛墊
-| 鍏朵粬 | 閿欒 | 绛?180 绉掑悗閲嶈瘯 |
+| **200** | 接受成功，无关机指令 | 等 180 秒后再上报 |
+| **201** | 接受成功，下发关机指令 | 立即执行 `shutdown -s -t 0` |
+| **401** | 未注册 / 鉴权失效 | 停止上报，进程退出 |
+| **429** | 请求过频（间隔 < 120 秒）| 等待后重试（不消耗 last_beat_at）|
+| 其他 | 错误 | 等 180 秒后重试 |
 
-### 鎺ㄨ崘鍝嶅簲澶?
+### 推荐响应头
+
 ```
 HTTP/1.1 200 OK
 Content-Type: application/json
 Content-Length: 0
 ```
 
-> 鏈嶅姟鍣ㄧ**鏃犻渶杩斿洖浠讳綍 body 鍐呭**锛岀姸鎬佺爜鍗宠涔夈€?
-## 5. 棰戠巼鎺у埗
+> 服务器端**无需返回任何 body 内容**，状态码即语义。
 
-### 瀹㈡埛绔?
-- 蹇冭烦闂撮殧锛?*180 绉?*锛坔ardcode锛屽彲鍦?`BeatIntervalSeconds` 甯搁噺淇敼锛?- 鏀跺埌 429 鍚?*閲嶇疆 180 绉掕鏃?*锛屼笉绔嬪嵆閲嶈瘯
+## 5. 频率控制
 
-### 鏈嶅姟绔?
-- 棰戠巼搴曠嚎锛?*120 绉?*锛堜袱娆?beat 闂撮殧涓嶅緱灏忎簬姝ゅ€硷級
-- 棰戠巼妫€鏌ラ€昏緫锛氬綋鍓嶆椂闂?- `last_beat_at` < 120 绉?鈫?杩斿洖 429
-- 429 鏃?*涓嶆洿鏂?* `last_beat_at`锛?*涓嶅啓鍏?* `t_device_log`锛堥槻姝㈡伓鎰忓埛鏂帮級
+### 客户端
 
-## 6. 鍏虫満鎸囦护娴佽浆
+- 心跳间隔：**180 秒**（hardcode，可在 `BeatIntervalSeconds` 常量修改）
+- 收到 429 后**重置 180 秒计时**，不立即重试
+
+### 服务端
+
+- 频率底线：**120 秒**（两次 beat 间隔不得小于此值）
+- 频率检查逻辑：当前时间 - `last_beat_at` < 120 秒 → 返回 429
+- 429 时**不更新** `last_beat_at`，**不写入** `t_device_log`（防止恶意刷新）
+
+## 6. 关机指令流转
 
 ```
-瀹堕暱鍦ㄥ叕浼楀彿鍙戣捣鍏虫満
-    鈫?鏈嶅姟鍣ㄦ爣璁?t_device.shutdown_status = 1锛堝緟涓嬪彂锛?    鈫?PC 涓嬫 beat 涓婃姤
-    鈫?鏈嶅姟鍣ㄦ娴嬪埌 shutdown_status = 1
-    鈫?杩斿洖 HTTP 201
-    鈫?鏇存柊 t_device.shutdown_status = 2锛堝凡涓嬪彂锛? 鍐欏叆 t_device_log.cmd_status = 1
-    鈫?PC 瀹㈡埛绔墽琛?shutdown -s -t 0
-    鈫?PC 鍏虫満
+家长在公众号发起关机
+    ↓
+服务器标记 t_device.shutdown_status = 1（待下发）
+    ↓
+PC 下次 beat 上报
+    ↓
+服务器检测到 shutdown_status = 1
+    ↓
+返回 HTTP 201
+    ↓
+更新 t_device.shutdown_status = 2（已下发）+ 写入 t_device_log.cmd_status = 1
+    ↓
+PC 客户端执行 shutdown -s -t 0
+    ↓
+PC 关机
 ```
 
-## 7. 鏁版嵁瀛樺偍寤鸿锛堟湇鍔＄锛?
-### `t_device`锛堣澶囪〃锛?
-| 瀛楁 | 绫诲瀷 | 璇存槑 |
+## 7. 数据存储建议（服务端）
+
+### `t_device`（设备表）
+
+| 字段 | 类型 | 说明 |
 |------|------|------|
-| `uid` | CHAR(32) UNIQUE | 璁惧鏍囪瘑 |
-| `uid_key` | CHAR(16) | 閴存潈瀵嗛挜 |
-| `name` | VARCHAR(64) | 璁惧鍚嶏紙鏉ヨ嚜璇锋眰鎴栭粯璁ゆ満鍣ㄥ悕锛墊
-| `os` | VARCHAR(32) | 鎿嶄綔绯荤粺 |
-| `status` | TINYINT | 0=绂荤嚎 1=鍦ㄧ嚎 |
-| `shutdown_status` | TINYINT | 0=鏃?1=寰呬笅鍙?2=宸蹭笅鍙?|
-| `last_beat_at` | DATETIME | 鏈€鍚庡績璺虫椂闂达紙鐢ㄤ簬 120 绉掗鐜囨鏌ワ級|
-| `last_ip` | VARCHAR(45) | 鏈€鍚庝笂鎶?IP锛坣ginx 閫忎紶锛墊
-| `bound_openid` | VARCHAR(64) | 缁戝畾鐨勫井淇?openid锛堝畼鏂规湇鍔″櫒蹇呭～锛墊
-| `created_at`, `updated_at` | DATETIME | 鏃堕棿鎴?|
+| `uid` | CHAR(32) UNIQUE | 设备标识 |
+| `uid_key` | CHAR(16) | 鉴权密钥 |
+| `name` | VARCHAR(64) | 设备名（来自请求或默认机器名）|
+| `os` | VARCHAR(32) | 操作系统 |
+| `status` | TINYINT | 0=离线 1=在线 |
+| `shutdown_status` | TINYINT | 0=无 1=待下发 2=已下发 |
+| `last_beat_at` | DATETIME | 最后心跳时间（用于 120 秒频率检查）|
+| `last_ip` | VARCHAR(45) | 最后上报 IP（nginx 透传）|
+| `bound_openid` | VARCHAR(64) | 绑定的微信 openid（官方服务器必填）|
+| `created_at`, `updated_at` | DATETIME | 时间戳 |
 
-### `t_device_log`锛堝績璺虫棩蹇楋紝鍙€夛級
+### `t_device_log`（心跳日志，可选）
 
-| 瀛楁 | 绫诲瀷 | 璇存槑 |
+| 字段 | 类型 | 说明 |
 |------|------|------|
-| `uid` | CHAR(32) | 璁惧鏍囪瘑 |
-| `cpu_usage` | DECIMAL(5,2) | CPU 浣跨敤鐜?|
-| `mem_usage` | DECIMAL(5,2) | 鍐呭瓨浣跨敤鐜?|
-| `beat_time` | DATETIME | 蹇冭烦鏃堕棿 |
-| `cmd_status` | TINYINT | 0=鏃犳寚浠?1=宸蹭笅鍙戝叧鏈?|
+| `uid` | CHAR(32) | 设备标识 |
+| `cpu_usage` | DECIMAL(5,2) | CPU 使用率 |
+| `mem_usage` | DECIMAL(5,2) | 内存使用率 |
+| `beat_time` | DATETIME | 心跳时间 |
+| `cmd_status` | TINYINT | 0=无指令 1=已下发关机 |
 
-## 8. 瀹屾暣娴佺▼绀轰緥
+## 8. 完整流程示例
 
 ```
-PC 涓婄數
-  鈫?PC 璇诲彇 WeikongPC.ini 鈫?鎷垮埌 uid + uid_key + ServerUrl
-  鈫?PC 姣?180 绉?POST /beat锛堝甫 X-Uid, X-Uid-Key header锛?  鈫?鏈嶅姟鍣ㄦ牎楠岋細
-  1. uid 鏍煎紡鏄惁 32 浣?hex
-  2. uid 鏄惁鍦?t_device 涓瓨鍦?  3. uid_key 鏄惁鍖归厤
-  4. last_beat_at 璺濅粖鏄惁 鈮?120 绉?  鈫?鍐欏叆 t_device_log + 鏇存柊 t_device
-  鈫?妫€娴?shutdown_status锛?  - 鑻ヤ负 1锛氳繑鍥?201锛堝叧鏈烘寚浠わ級
-  - 鍚﹀垯锛氳繑鍥?200锛堟甯革級
-  鈫?PC 鏀跺埌鍝嶅簲鍚庯細
-  - 200锛氱瓑 180 绉掑啀涓婃姤
-  - 201锛氭墽琛?shutdown -s -t 0 鍚庨€€鍑?  - 401锛氬仠姝㈡湇鍔★紝杩涚▼閫€鍑?  - 429锛氱瓑寰?180 绉掑悗鍐嶄笂鎶?```
+PC 上电
+  ↓
+PC 读取 WeikongPC.ini → 拿到 uid + uid_key + ServerUrl
+  ↓
+PC 每 180 秒 POST /beat（带 X-Uid, X-Uid-Key header）
+  ↓
+服务器校验：
+  1. uid 格式是否 32 位 hex
+  2. uid 是否在 t_device 中存在
+  3. uid_key 是否匹配
+  4. last_beat_at 距今是否 ≥ 120 秒
+  ↓
+写入 t_device_log + 更新 t_device
+  ↓
+检测 shutdown_status：
+  - 若为 1：返回 201（关机指令）
+  - 否则：返回 200（正常）
+  ↓
+PC 收到响应后：
+  - 200：等 180 秒再上报
+  - 201：执行 shutdown -s -t 0 后退出
+  - 401：停止服务，进程退出
+  - 429：等待 180 秒后再上报
+```
 
-## 9. 浣跨敤瀹樻柟鏈嶅姟鍣ㄧ殑鍓嶆彁
+## 9. 使用官方服务器的前提
 
-鑻ヤ娇鐢ㄥ畼鏂规湇鍔″櫒 `https://weikongpc.com/beat`锛岄渶瑕侊細
+若使用官方服务器 `https://weikongpc.com/beat`，需要：
 
-1. 鉁?鍦ㄥ井淇″叕浼楀彿銆屽井鎺у効绔ョ數鑴慞C銆嶈彍鍗曚腑閫夋嫨銆岀粦瀹氥€?2. 鉁?鐢ㄥ井淇℃壂鎻忓畨瑁呯▼搴忓睍绀虹殑 ini 浜岀淮鐮?3. 鉁?寰俊鍏紬鍙蜂細璋冪敤瀹樻柟鎺ュ彛灏?openid 涓?uid 鍏宠仈
-4. 鉁?鍚庣画瀹堕暱鍙€氳繃鍏紬鍙锋煡璇㈣澶囩姸鎬併€佽繙绋嬪叧鏈?
-**鑷缓鏈嶅姟鍣?*鏃犻渶鍏紬鍙风粦瀹氾紝鍙渶鑷瀹炵幇绗?6 鑺傜殑鐘舵€佺鐞嗐€?
-## 10. 鍙傝€冨疄鐜?
-瀹屾暣瀹㈡埛绔弬鑰冨疄鐜帮細`csapp_weikongpc_client/cswsv_weikongpc_report/Program.cs`
+1. ✅ 在微信公众号「微控儿童电脑PC」菜单中选择「绑定」
+2. ✅ 用微信扫描安装程序展示的 ini 二维码
+3. ✅ 微信公众号会调用官方接口将 openid 与 uid 关联
+4. ✅ 后续家长可通过公众号查询设备状态、远程关机
 
-娴嬭瘯鎶ュ憡锛堝畼鏂?API锛夛細`docs/API_TEST_REPORT.md`锛堝彲閫夛級
+**自建服务器**无需公众号绑定，只需自行实现第 6 节的状态管理。
 
-鏈嶅姟鍣ㄥ疄鐜版寚鍗楋細`docs/SERVER_IMPLEMENTATION.md`
+## 10. 参考实现
 
-## 11. 鐗堟湰
+完整客户端参考实现：`csapp_weikongpc_client/cswsv_weikongpc_report/Program.cs`
 
-- v1.0锛?026-08-10锛夛細鍒濆鐗堟湰锛岀姸鎬佺爜椹卞姩鍗忚
+测试报告（官方 API）：`docs/API_TEST_REPORT.md`（可选）
+
+服务器实现指南：`docs/SERVER_IMPLEMENTATION.md`
+
+## 11. 版本
+
+- v1.0（2026-08-10）：初始版本，状态码驱动协议
 
 ---
 
-馃寪 瀹樼綉锛歨ttps://weikongpc.com/
-馃摟 鍏紬鍙凤細寰帶鍎跨鐢佃剳PC
-馃搫 鍗忚锛歁IT License
+🌐 官网：https://weikongpc.com/
+📧 公众号：微控儿童电脑PC
+📄 协议：MIT License
